@@ -16,9 +16,9 @@ n1_img = nib.load(filename="91.img.nii.gz")
 print(n1_img)
 
 # Resampling
-# data array shape
 data_shape = n1_img.header.get_data_shape()
 
+# if chunk size is zero, do the whole image at once
 if chunk_size == 0:
     chunk_size = data_shape[2]
 
@@ -32,43 +32,39 @@ x_space = np.arange(0,data_shape[0])
 y_space = np.arange(0,data_shape[1])
 
 steps = np.divide(target_pixdim, pix_dim)
-# ystep = target_pixdim[1] / pix_dim[1]
-# zstep = target_pixdim[2] / pix_dim[2]
 
 xx = np.arange(0, data_shape[0] - 1, steps[0])
 yy = np.arange(0, data_shape[1] - 1, steps[1])
 
-# fixme calculate size of resampled data
+# calculate size of resampled data
+num_chunks = np.int32(np.ceil(data_shape[2] / chunk_size))
 resamp_shape = np.int32(np.ceil(np.divide(data_shape, steps)))
 samples_per_chunk = np.int32(np.ceil(np.divide(chunk_size, steps[2])))
-resamp_shape[2] = np.int32(samples_per_chunk * np.floor(data_shape[2] / chunk_size))
-resamp_shape[2] += np.int32(samples_per_chunk * np.floor(np.mod(data_shape[2], chunk_size)))
+resamp_shape[2] = np.int32(samples_per_chunk * (num_chunks-1))
+resamp_shape[2] += np.int32(np.ceil(np.mod(data_shape[2], chunk_size) / steps[2]))
 
 print(resamp_shape)
-lin_resampled_data = np.zeros(shape=resamp_shape)
-cub_resampled_data = np.zeros(shape=resamp_shape)
+resampled_data = np.zeros(shape=resamp_shape)
 
-for i in np.arange(0, data_shape[2], chunk_size):
-    upper_bound = min(i + chunk_size, data_shape[2])
-    z_space = np.arange(i, upper_bound)
+for i in np.arange(0, num_chunks):
+    before_lb = i*chunk_size
+    before_ub = min(before_lb + chunk_size, data_shape[2])
+    after_lb = i*samples_per_chunk
+    after_ub = min(after_lb + samples_per_chunk, data_shape[2])
+    z_space = np.arange(before_lb, before_ub)
 
-    zz = np.arange(i, upper_bound, steps[2])
+    zz = np.arange(before_lb, before_ub, steps[2])
     X, Y, Z = np.meshgrid(xx, yy, zz, indexing='ij')
 
-    # cub_interp = scipy.interpolate.RegularGridInterpolator((x_space, y_space, z_space), data[:,:,i:upper_bound],
-    #                             method="cubic", fill_value=None, bounds_error=True, solver=None, solver_args=None)
-    # cub_resampled_data[:,:,i:(i+samples_per_chunk)] = cub_interp((X, Y, Z))
-
-    lin_interp = scipy.interpolate.RegularGridInterpolator((x_space, y_space, z_space), data[:,:,i:upper_bound],
+    interp = scipy.interpolate.RegularGridInterpolator((x_space, y_space, z_space), data[:,:,before_lb:before_ub],
                                 method="linear", fill_value=None, bounds_error=True, solver=None, solver_args=None)
-    lin_resampled_data[:,:,i:(i+samples_per_chunk)] = lin_interp((X, Y, Z))
+    resampled_data[:,:,after_lb:after_ub] = interp((X, Y, Z))
 
 # plot against original
 fig = plt.figure()
 
-plt.plot(x_space, data[:,4,4], c='k', label='data')
-plt.plot(xx, cub_resampled_data[:,4,4], c='m', label='cubic')
-plt.plot(xx, lin_resampled_data[:,4,4], c='g', label='linear')
+plt.plot(x_space, data[:,0,4], c='k', label='data')
+plt.plot(xx, resampled_data[:,0,2], c='g', label='linear')
 
 # ax = fig.add_subplot(projection='3d')
 # ax.scatter(x_space, y_space, data[:,:,4], s=60, c='k', label='data')
