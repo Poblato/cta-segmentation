@@ -1,23 +1,47 @@
 import numpy as np
 import os
+import sys
 import nibabel as nib
 from pathlib import Path
 import scipy
 import matplotlib.pyplot as plt
 
-# TODO: read params from command line
-inputfilepath = Path.cwd().joinpath("1-200")
-outputfilepath = "91_sampled.img.nii.gz"
+# param scheme:
+# specify_shape: bool
+# target: 3 intgers
+# input filepath: string
+# output filepath: string
+# chunk size (optional): int
 
-specify_shape = True
-target_shape = [256, 256, 275]
-target_pixdim = [1, 1, 1]
-chunk_size = 16
+num_args = len(sys.argv)
 
-n1_img = nib.load(filename="91.img.nii.gz")
+if (num_args < 7) or (num_args > 8):
+    print("Usage: python resampling.py bool:specify_shape int:target_x int:target_y int:target_shape_z str:input_filepath str:output_filepath int:chunk_size(optional)")
+    sys.exit(1)
+
+try:
+    specify_shape = bool(int(sys.argv[1]))
+    target_shape = [int(sys.argv[2]), int(sys.argv[3]), int(sys.argv[4])]
+    inputfilepath = Path(sys.argv[5])
+    outputfilepath = sys.argv[6]
+    if num_args == 8:
+        chunk_size = int(sys.argv[7])
+    else:
+        chunk_size = 0
+except ValueError:
+    print("Error parsing command line arguments.")
+    sys.exit(1)
+
+# inputfilepath = Path.cwd().joinpath("1-200")
+# outputfilepath = "91_sampled.img.nii.gz"
+# specify_shape = True
+# target_shape = [256, 256, 275]
+# target_pixdim = [1, 1, 1]
+# chunk_size = 16
+
+n1_img = nib.load(filename=inputfilepath)
 # print(n1_img)
 
-# Resampling
 data_shape = n1_img.header.get_data_shape()
 
 # if chunk size is zero, do the whole image at once
@@ -79,7 +103,7 @@ for i in np.arange(0, num_chunks):
 # calculate affine from new pixdims
 affine = n1_img.affine
 affine[0:3,0:3] = np.diag(target_pixdim)
-affine[0,0] = -affine[0,0] # flip x axis
+affine[0,0] = -affine[0,0] # flip x dim because image coordiantes are weird
 
 # assemble into new Nifti1Image and save
 resampled_img = nib.Nifti1Image(resampled_data, affine=affine, header=n1_img.header)
