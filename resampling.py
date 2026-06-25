@@ -23,7 +23,7 @@ try:
     specify_shape = bool(int(sys.argv[1]))
     target_shape = [int(sys.argv[2]), int(sys.argv[3]), int(sys.argv[4])]
     inputfilepath = Path(sys.argv[5])
-    outputfilepath = sys.argv[6]
+    outputfilepath = Path(sys.argv[6])
     if num_args == 8:
         chunk_size = int(sys.argv[7])
     else:
@@ -31,13 +31,6 @@ try:
 except ValueError:
     print("Error parsing command line arguments.")
     sys.exit(1)
-
-# inputfilepath = Path.cwd().joinpath("1-200")
-# outputfilepath = "91_sampled.img.nii.gz"
-# specify_shape = True
-# target_shape = [256, 256, 275]
-# target_pixdim = [1, 1, 1]
-# chunk_size = 16
 
 n1_img = nib.load(filename=inputfilepath)
 # print(n1_img)
