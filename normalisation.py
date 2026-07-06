@@ -11,7 +11,7 @@ from pathlib import Path
 
 num_args = len(sys.argv)
 
-if (num_args != 6):
+if (num_args != 5):
     print("Usage: python normalisation.py float:mean, float:std_dev str:input_filepath str:output_filepath")
     sys.exit(1)
 

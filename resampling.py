@@ -4,7 +4,7 @@ import sys
 import nibabel as nib
 from pathlib import Path
 import scipy
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 
 # param scheme:
 # specify_shape: bool
@@ -37,10 +37,6 @@ n1_img = nib.load(filename=inputfilepath)
 
 data_shape = n1_img.header.get_data_shape()
 
-# if chunk size is zero, do the whole image at once
-if chunk_size == 0:
-    chunk_size = data_shape[2]
-
 # pixel dimensions in millimeters
 pix_dim = n1_img.header.get_zooms()
 
@@ -61,11 +57,18 @@ xx = np.arange(0, data_shape[0] - 1, steps[0])
 yy = np.arange(0, data_shape[1] - 1, steps[1])
 
 # calculate size of resampled data
-num_chunks = np.int32(np.ceil(data_shape[2] / chunk_size))
 resamp_shape = np.int32(np.ceil(np.divide(data_shape, steps)))
-samples_per_chunk = np.int32(np.ceil(np.divide(chunk_size, steps[2])))
-resamp_shape[2] = np.int32(samples_per_chunk * (num_chunks-1))
-resamp_shape[2] += np.int32(np.ceil(np.mod(data_shape[2], chunk_size) / steps[2]))
+# if chunk size is zero, do the whole image at once
+if chunk_size == 0:
+    chunk_size = data_shape[2]
+    num_chunks = 1
+    samples_per_chunk = np.int32(np.ceil(np.divide(chunk_size, steps[2])))
+    resamp_shape[2] = samples_per_chunk
+else:
+    num_chunks = np.int32(np.ceil(data_shape[2] / chunk_size))
+    samples_per_chunk = np.int32(np.ceil(np.divide(chunk_size, steps[2])))
+    resamp_shape[2] = np.int32(samples_per_chunk * (num_chunks-1))
+    resamp_shape[2] += np.int32(np.ceil(np.divide(np.mod(data_shape[2], chunk_size), steps[2])))
 
 # print(resamp_shape)
 resampled_data = np.zeros(shape=resamp_shape)
