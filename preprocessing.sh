@@ -56,9 +56,9 @@ process_file() {
   tmpfile="$(mktemp -t resample_tmp.XXXXXX).nii.gz"
   trap 'rm -f "$tmpfile"' RETURN
 
-  python3 resampling.py 1 128 128 128 "$infile" "$tmpfile"
+  python3 preprocessing_scripts/resampling.py 1 128 128 128 "$infile" "$tmpfile"
 
-  python3 normalisation.py "$target_mean" "$target_std" "$tmpfile" "$outfile_path"
+  python3 preprocessing_scripts/normalisation.py "$target_mean" "$target_std" "$tmpfile" "$outfile_path"
 
   echo "Saved: $outfile_path"
 }
