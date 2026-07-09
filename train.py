@@ -69,7 +69,7 @@ OUT_CLASSES = 1
 layer_batch_size = 128
 
 def TrainModel(model, train_loader, val_loader):
-    log = logging.getLogger('INNER_train')
+    log = logging.getLogger('train')
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
     LR = 2e-4
@@ -210,6 +210,69 @@ def TrainModel(model, train_loader, val_loader):
         print(line)
         # if es_triggered: break
 
+def EvalutateModel(model, val_loader, test_loader):
+    log = logging.getLogger('train')
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model.to(device)
+
+    model.eval()
+
+    running_loss = 0.0
+    running_acc = 0.0
+
+    with torch.no_grad():
+        for batch in val_loader:
+            img = batch["image"][tio.DATA].to(device)
+            lbl = batch["label"][tio.DATA].to(device)
+
+            for i in range(0, image_height, layer_batch_size):
+                img_layer = img[:, :, :, :, i:i+layer_batch_size]
+                lbl_layer = lbl[:, :, :, :, i:i+layer_batch_size]
+
+                # reshape to something sensible (batch, channels, width, height)
+                img_layer = img_layer.squeeze(1).permute(3, 0, 1, 2)
+                lbl_layer = lbl_layer.squeeze(1).permute(3, 0, 1, 2)
+
+                logits = model(img_layer)
+                V_loss = loss_fn(logits, lbl_layer)
+                running_loss += V_loss.item() * lbl_layer.size(0)
+
+                probs = torch.sigmoid(logits)
+                preds = (probs > TH).long()
+                running_acc += (lbl_layer.detach().cpu().numpy() == preds.detach().cpu().numpy()).mean() * img.size(0)
+
+        ValLoss = running_loss / max(1, val_N)
+        ValAcc = running_acc / max(1, val_N)
+
+        running_loss = 0.0
+        running_acc = 0.0
+
+        for batch in test_loader:
+            img = batch["image"][tio.DATA].to(device)
+            lbl = batch["label"][tio.DATA].to(device)
+
+            for i in range(0, image_height, layer_batch_size):
+                img_layer = img[:, :, :, :, i:i+layer_batch_size]
+                lbl_layer = lbl[:, :, :, :, i:i+layer_batch_size]
+
+                # reshape to something sensible (batch, channels, width, height)
+                img_layer = img_layer.squeeze(1).permute(3, 0, 1, 2)
+                lbl_layer = lbl_layer.squeeze(1).permute(3, 0, 1, 2)
+
+                logits = model(img_layer)
+                V_loss = loss_fn(logits, lbl_layer)
+                running_loss += V_loss.item() * lbl_layer.size(0)
+
+                probs = torch.sigmoid(logits)
+                preds = (probs > TH).long()
+                running_acc += (lbl_layer.detach().cpu().numpy() == preds.detach().cpu().numpy()).mean() * img.size(0)
+
+        TestLoss = running_loss / max(1, test_N)
+        TestAcc = running_acc / max(1, test_N)
+
+        line=f"{ValLoss};{ValAcc};{TestLoss};{TestAcc}"
+        log.info(line)
+        print(line)
 
 model = smp.Unet(
     encoder_name="densenet121",
@@ -220,24 +283,8 @@ model = smp.Unet(
 
 TrainModel(model, train_dataloader, valid_dataloader)
 
-print("done?")
+EvaluateModel(model, valid_dataloader, test_dataloader)
 
-# FIXME: run validation and test datasets for final evaluation
+# FIXME: export model weights to file
 
-
-# trainer = pl.Trainer(max_epochs=EPOCHS, log_every_n_steps=1)
-
-# trainer.fit(
-#     model,
-#     train_dataloaders=train_dataloader,
-#     val_dataloaders=valid_dataloader,
-# )
-
-# run validation dataset
-# valid_metrics = trainer.validate(model, dataloaders=valid_dataloader, verbose=False)
-# print(valid_metrics)
-
-# # run test dataset
-# test_metrics = trainer.test(model, dataloaders=test_dataloader, verbose=False)
-# print(test_metrics)
-
+print("done")
