@@ -196,9 +196,9 @@ class WeightedLoss(_Loss):
             loss: torch.Tensor
         """
 
-        if self.smooth_factor is not None:
-            soft_targets = (1 - y_true) * self.smooth_factor + y_true * (
-                1 - self.smooth_factor
+        if self.bce_smooth_factor is not None:
+            soft_targets = (1 - y_true) * self.bce_smooth_factor + y_true * (
+                1 - self.bce_smooth_factor
             )
         else:
             soft_targets = y_true
@@ -225,8 +225,8 @@ class WeightedLoss(_Loss):
     
     def focal_forward(self, y_pred: torch.Tensor, y_true: torch.Tensor) -> torch.Tensor:
         if self.mode in {BINARY_MODE, MULTILABEL_MODE}:
-            y_true = y_true.view(-1)
-            y_pred = y_pred.view(-1)
+            y_true = y_true.reshape(-1)
+            y_pred = y_pred.reshape(-1)
 
             if self.ignore_index is not None:
                 # Filter predictions with ignore label from loss computation

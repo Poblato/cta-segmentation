@@ -103,9 +103,6 @@ def TrainModel(model, train_loader, val_loader, loss_fn, layer_batch_size):
         model.train()
         running_loss = 0.0
         running_acc = 0.0
-        y_true, y_pred = [], []
-
-        # need to input layer by layer rather than as whole images
 
         for batch in train_loader:
             img = batch["image"][tio.DATA].to(device)
@@ -128,24 +125,18 @@ def TrainModel(model, train_loader, val_loader, loss_fn, layer_batch_size):
                 T_loss.backward()
                 optimizer.step()
 
-                running_loss += T_loss.item() * img.size(0)
+                running_loss += T_loss.item() * layer_batch_size
                 with torch.no_grad():
                     probs = torch.sigmoid(logits)
                     preds = (probs > TH).long()
-                    running_acc += (lbl_layer.detach().cpu().numpy() == preds.detach().cpu().numpy()).mean() * img.size(0)
-                    # y_true.append(lbl_layer.detach().cpu().numpy())
-                    # y_pred.append(preds.detach().cpu().numpy())
+                    running_acc += (lbl_layer.detach().cpu().numpy() == preds.detach().cpu().numpy()).mean() * layer_batch_size
 
-        TrainLoss = running_loss / max(1, train_N)
-        # y_true = np.concatenate(y_true).reshape(-1)
-        # y_pred = np.concatenate(y_pred).reshape(-1)
-        # TrainAcc  = (y_true == y_pred).mean()
-        TrainAcc = running_acc / max(1, train_N)
+        TrainLoss = running_loss / max(1, train_N*image_height)
+        TrainAcc = running_acc / max(1, train_N*image_height)
 
         model.eval()
         running_loss = 0.0
         running_acc = 0.0
-        y_true, y_prob, y_pred = [], [], []
 
         with torch.no_grad():
             for batch in val_loader:
@@ -162,26 +153,14 @@ def TrainModel(model, train_loader, val_loader, loss_fn, layer_batch_size):
 
                     logits = model(img_layer)
                     V_loss = loss_fn(logits, lbl_layer)
-                    running_loss += V_loss.item() * img.size(0)
+                    running_loss += V_loss.item() * layer_batch_size
 
                     probs = torch.sigmoid(logits)
                     preds = (probs > TH).long()
-                    running_acc += (lbl_layer.detach().cpu().numpy() == preds.detach().cpu().numpy()).mean() * img.size(0)
+                    running_acc += (lbl_layer.detach().cpu().numpy() == preds.detach().cpu().numpy()).mean() * layer_batch_size
 
-                    # y_true.append(lbl_layer.detach().cpu().numpy())
-                    # y_prob.append(probs.detach().cpu().numpy())
-                    # y_pred.append(preds.detach().cpu().numpy())
-
-        ValLoss = running_loss / max(1, val_N)
-
-        # y_true  = np.concatenate(y_true).reshape(-1)
-        # y_prob  = np.concatenate(y_prob).reshape(-1)
-        # y_pred  = np.concatenate(y_pred).reshape(-1)
-
-        ValAcc = running_acc / max(1, val_N)
-
-        # ValAcc  = (y_true == y_pred).mean()
-        # AUC = roc_auc_score(y_true, y_prob)
+        ValLoss = running_loss / max(1, val_N*image_height)
+        ValAcc = running_acc / max(1, val_N*image_height)
 
         # -------------- EMA + scheduler --------------
         ema_val = ValLoss if ema_val is None else alpha_ema*ValLoss + (1 - alpha_ema)*ema_val
