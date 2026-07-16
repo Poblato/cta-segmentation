@@ -60,8 +60,6 @@ valid_dataloader = tio.SubjectsLoader(
 #     shuffle=False,
 # )
 
-
-
 # Some training hyperparameters
 EPOCHS = 10
 T_MAX = EPOCHS * len(train_dataloader)
@@ -204,6 +202,9 @@ def EvaluateModel(model, val_loader, loss_fn, layer_batch_size):
     running_loss = 0.0
     running_acc = 0.0
     running_dice = 0.0
+    running_jaccard = 0.0
+    running_precision = 0.0
+    running_recall = 0.0
 
     with torch.no_grad():
         for batch in val_loader:
@@ -220,21 +221,29 @@ def EvaluateModel(model, val_loader, loss_fn, layer_batch_size):
 
                 logits = model(img_layer)
                 V_loss = loss_fn(logits, lbl_layer)
-                running_loss += V_loss.item() * img.size(0)
+                running_loss += V_loss.item() * layer_batch_size
 
                 probs = torch.sigmoid(logits)
                 preds = (probs > TH).long()
-                running_acc += (lbl_layer.detach().cpu().numpy() == preds.detach().cpu().numpy()).mean() * img.size(0)
-                running_dice += smp.metrics.f1_score(preds, lbl_layer)
+                running_acc += (lbl_layer.detach().cpu().numpy() == preds.detach().cpu().numpy()).mean() * layer_batch_size
+                running_dice += smp.metrics.f1_score(preds, lbl_layer) * layer_batch_size
+                intersection = np.intersect1d(lbl_layer.detach().cpu().numpy(), preds.detach().cpu().numpy()).sum()
+                union = np.union1d(lbl_layer.detach().cpu().numpy(), preds.detach().cpu().numpy()).sum()
+                running_jaccard = intersection/union * layer_batch_size
+                running_precision += smp.metrics.precision(preds, lbl_layer) * layer_batch_size
+                running_recall += smp.metrics.sensitivity(preds, lbl_layer) * layer_batch_size
 
-        ValLoss = running_loss / max(1, val_N)
-        ValAcc = running_acc / max(1, val_N)
-        DiceScore = running_dice / max(1, val_N)
+        Loss = running_loss / max(1, val_N*image_height)
+        Acc = running_acc / max(1, val_N*image_height)
+        DiceScore = running_dice / max(1, val_N*image_height)
+        JaccardIndex = running_jaccard / max(1, val_N*image_height)
+        Precision = running_precision / max(1, val_N*image_height)
+        Recall = running_recall / max(1, val_N*image_height)
 
-        line=f"{ValLoss};{ValAcc};{DiceScore}"
+        line=f"{Loss};{Acc};{DiceScore};{JaccardIndex};{Precision};{Recall}"
         log.info(line)
         print(line)
-        return {ValLoss, ValAcc, DiceScore}
+        return {Loss, Acc, DiceScore, JaccardIndex, Precision, Recall}
 
 # FIXME: Calculate positive prior probability for focal loss
 pos_prior = 0.05
@@ -243,7 +252,7 @@ focal_strength = 2.0
 # configure HPO
 # params to vary: depth (def), layer_batch_size (def), loss fn (def), model encoder (maybe), LR (maybe)
 grid = {
-    'model_depth': [3, 4, 5],
+    'model_depth': [3, 4],
     'layer_batch_size': [32, 64, 128],
     'dice_loss': [0, 1],
     'bce_loss': [0, 1],
@@ -259,15 +268,15 @@ logger = logging.getLogger("configs")
 logger.setLevel(logging.INFO)
 logger.addHandler(logging.FileHandler("logs/hpo.log", mode="w"))
 
-logger.info("ID, Depth, batch size, dice, bce, focal, val_loss, val_acc, dice_score")
+logger.info("ID, Depth, batch size, dice, bce, focal, loss, acc, dice_score, jaccard index, precision, recall")
 
 for params in param_grid:
-
     print(params)
     # skip configs with 0 loss function
     if (params['dice_loss'] == 0 and params['bce_loss'] == 0 and params['focal_loss'] == 0):
         continue
-
+    
+    # FIXME: should this start at 128? not 256
     decoder_channels = [256, 128, 64, 32, 16]
 
     model = smp.Unet(
@@ -296,10 +305,10 @@ for params in param_grid:
 
     TrainModel(model, train_dataloader, valid_dataloader, loss_fn, params['layer_batch_size'])
 
-    ValLoss, ValAcc, DiceScore = EvaluateModel(model, valid_dataloader, loss_fn, params['layer_batch_size'])
+    Loss, Acc, DiceScore, JaccardIndex, Precision, Recall = EvaluateModel(model, valid_dataloader, loss_fn, params['layer_batch_size'])
 
-    # FIXME: log performance of each config
-    line = f"{config_num},{params['model_depth']},{params['layer_batch_size']},{dice_str},{bce_str},{focal_str},{ValLoss},{ValAcc},{DiceScore}"
+    # Log performance of each config
+    line = f"{config_num},{params['model_depth']},{params['layer_batch_size']},{dice_str},{bce_str},{focal_str},{Loss},{Acc},{DiceScore},{JaccardIndex},{Precision},{Recall}"
     logger.info(line)
     print(line)
     # Export model weights to file
