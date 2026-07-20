@@ -250,7 +250,7 @@ focal_strength = 2.0
 # configure HPO
 # params to vary: depth (def), layer_batch_size (def), loss fn (def), model encoder (maybe), LR (maybe)
 grid = {
-    'model_depth': [3],
+    'model_depth': [3, 4],
     'layer_batch_size': [32, 64, 128],
     'dice_loss': [0, 1],
     'bce_loss': [0, 1],
@@ -310,7 +310,10 @@ for params in param_grid:
     logger.info(line)
     print(line)
     # Export model weights to file
-    model.save_pretrained(f"model_weights/{config_num}.pth")
+    model.save_pretrained(f"model_weights/config_{config_num}")
     config_num += 1
+
+    # clear model to free GPU memory
+    del model
 
 print("done")
