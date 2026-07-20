@@ -225,12 +225,13 @@ def EvaluateModel(model, val_loader, loss_fn, layer_batch_size):
                 probs = torch.sigmoid(logits)
                 preds = (probs > TH).long()
                 running_acc += (lbl_layer.detach().cpu().numpy() == preds.detach().cpu().numpy()).mean() * layer_batch_size
-                running_dice += smp.metrics.f1_score(preds, lbl_layer) * layer_batch_size
+                running_dice += loss_fn.compute_score(preds, lbl_layer) * layer_batch_size
                 intersection = np.intersect1d(lbl_layer.detach().cpu().numpy(), preds.detach().cpu().numpy()).sum()
                 union = np.union1d(lbl_layer.detach().cpu().numpy(), preds.detach().cpu().numpy()).sum()
                 running_jaccard = intersection/union * layer_batch_size
-                running_precision += smp.metrics.precision(preds, lbl_layer) * layer_batch_size
-                running_recall += smp.metrics.sensitivity(preds, lbl_layer) * layer_batch_size
+                tp, fp, fn, tn = smp.metrics.get_stats(preds, (lbl_layer > 0), mode='binary')
+                running_precision += smp.metrics.precision(tp, fp, fn, tn) * layer_batch_size
+                running_recall += smp.metrics.sensitivity(tp, fp, fn, tn) * layer_batch_size
 
         Loss = running_loss / max(1, val_N*image_height)
         Acc = running_acc / max(1, val_N*image_height)
@@ -251,7 +252,7 @@ focal_strength = 2.0
 # configure HPO
 # params to vary: depth (def), layer_batch_size (def), loss fn (def), model encoder (maybe), LR (maybe)
 grid = {
-    'model_depth': [3, 4],
+    'model_depth': [3],
     'layer_batch_size': [32, 64, 128],
     'dice_loss': [0, 1],
     'bce_loss': [0, 1],
