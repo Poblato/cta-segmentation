@@ -175,17 +175,16 @@ def TrainModel(model, train_loader, val_loader, loss_fn, layer_batch_size):
             best_ema = ema_val
             best_val_loss = ValLoss
             best_epoch = epoch
-            best_lr_at_best = new_lr
             accuracy_at_best = ValAcc
             no_improve = 0
         else:
             no_improve += 1
 
-        # es_triggered = int(no_improve >= ES_PATIENCE)
-        line=f"{epoch};{TrainLoss};{TrainAcc};{ValLoss};{ValAcc};{ema_val};{new_lr};{lr_drop};{best_val_loss};{best_epoch}"
+        es_triggered = int(no_improve >= ES_PATIENCE)
+        line=f"{epoch};{TrainLoss};{TrainAcc};{ValLoss};{ValAcc};{ema_val};{new_lr};{lr_drop};{best_val_loss};{accuracy_at_best};{best_epoch}"
         log.info(line)
         print(line)
-        # if es_triggered: break
+        if es_triggered: break
 
 def EvaluateModel(model, val_loader, loss_fn, layer_batch_size):
     val_N=len(val_loader.dataset)
@@ -245,8 +244,8 @@ def EvaluateModel(model, val_loader, loss_fn, layer_batch_size):
         print(line)
         return {Loss, Acc, DiceScore, JaccardIndex, Precision, Recall}
 
-# FIXME: Calculate positive prior probability for focal loss
-pos_prior = 0.05
+# calculated using calc_priors.py
+pos_prior = 0.0017113971710205065
 focal_strength = 2.0
 
 # configure HPO
