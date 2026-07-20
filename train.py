@@ -23,7 +23,7 @@ print("Loading dataset...")
 for i in range(num_images):
     subject = tio.Subject(
         image=tio.ScalarImage(Path(f"dataset/processed/images/{i+1}.img_processed_norm.nii.gz")),
-        label=tio.LabelMap(Path(f"dataset/processed/labels/{i+1}.label_processed_norm.nii.gz")),
+        label=tio.LabelMap(Path(f"dataset/processed/labels/{i+1}.label_processed_norm.nii.gz"))
     )
     if i < 0.8 * num_images:
         train_list.append(subject)
@@ -227,6 +227,10 @@ def EvaluateModel(model, val_loader, loss_fn, layer_batch_size):
                 running_acc += (lbl_layer.detach().cpu().numpy() == preds.detach().cpu().numpy()).mean() * layer_batch_size
                 running_dice += loss_fn.compute_score(preds, lbl_layer) * layer_batch_size
                 tp, fp, fn, tn = smp.metrics.get_stats(preds, (lbl_layer > 0), mode='binary')
+                tp = torch.sum(tp)
+                fp = torch.sum(fp)
+                fn = torch.sum(fn)
+                tn = torch.sum(tn)
                 running_jaccard = smp.metrics.iou_score(tp, fp, fn, tn) * layer_batch_size
                 running_precision += smp.metrics.precision(tp, fp, fn, tn) * layer_batch_size
                 running_recall += smp.metrics.recall(tp, fp, fn, tn) * layer_batch_size

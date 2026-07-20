@@ -3,44 +3,67 @@ import torch
 import numpy as np
 import segmentation_models_pytorch as smp
 import nibabel as nib
+import torchio as tio
+from pathlib import Path
 from WeightedLoss import WeightedLoss
 
 # import model params
 # run model on specified file
 # read params from command line
 # 
-model_path = "model_weights/0.pth"
+model_path = "model_weights/config_0"
 image_path = "dataset/processed/images/1.img_processed_norm.nii.gz"
 label_path = "dataset/processed/labels/1.label_processed_norm.nii.gz"
 output_path = "segmentation_1.nii.gz"
 TH = 0.5
 
-model = smp.from_pretrained("model_weights/0.pth")
+model = smp.from_pretrained(model_path)
 
-img = nib.load(image_path)
-img_shape = img.header.get_data_shape()
-print(img_shape)
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+model.to(device)
 
-lbl = nib.load(label_path)
+subject = tio.Subject(
+    image=tio.ScalarImage(Path(image_path)),
+    label=tio.LabelMap(Path(label_path))
+)
 
-assert(img_shape[0]==128 and img_shape[1]==128)
+dataset = tio.SubjectsDataset([subject])
 
-probs = model(img.get_fdata())
-segmentation = (probs > TH).long()
-lbl_data = lbl.get_fdata()
+dataloader = tio.SubjectsLoader(
+    dataset,
+    batch_size=1,
+    num_workers=0,
+    shuffle=True,
+)
 
 loss_fn = WeightedLoss(smp.losses.BINARY_MODE, dice_str=0, bce_str=0, focal_str=1, from_logits=True, 
             bce_pos_weight=torch.tensor([1.0]), focal_alpha=0.0019, focal_gamma=2)
 
+with torch.no_grad():
+    for batch in dataloader:
+        img = batch["image"][tio.DATA].to(device)
+        lbl = batch["label"][tio.DATA].to(device)
 
-acc = (lbl_data.detach().cpu().numpy() == segmentation.detach().cpu().numpy()).mean()
-dice = loss_fn.compute_score(segmentation, lbl_data)
-tp, fp, fn, tn = smp.metrics.get_stats(segmentation, (lbl_data > 0), mode='binary')
-jaccard = smp.metrics.iou_score(tp, fp, fn, tn)
-precision = smp.metrics.precision(tp, fp, fn, tn)
-recall = smp.metrics.recall(tp, fp, fn, tn)
+        img_data = img.squeeze(1).permute(3, 0, 1, 2)
+        lbl_data = lbl.squeeze(1).permute(3, 0, 1, 2)
 
-print(f"acc={acc},dice={dice},tp={tp},fp={fp},fn={fn},fp={fp},jaccard={jaccard},precision={precision},recall={recall}")
+        logits = model(img_data)
+
+        probs = torch.sigmoid(logits)
+        segmentation = (probs > TH).long()
+
+        acc = (lbl_data.detach().cpu().numpy() == segmentation.detach().cpu().numpy()).mean()
+        dice = loss_fn.compute_score(segmentation, lbl_data).mean()
+        tp, fp, fn, tn = smp.metrics.get_stats(segmentation, (lbl_data > 0), mode='binary')
+        tp = torch.sum(tp)
+        fp = torch.sum(fp)
+        fn = torch.sum(fn)
+        tn = torch.sum(tn)
+        jaccard = smp.metrics.iou_score(tp, fp, fn, tn)
+        precision = smp.metrics.precision(tp, fp, fn, tn)
+        recall = smp.metrics.recall(tp, fp, fn, tn)
+
+        print(f"acc={acc},dice={dice},tp={tp},fp={fp},fn={fn},tn={tn},jaccard={jaccard},precision={precision},recall={recall}")
 
 # encode into new nifti image
 segmented_img = nib.Nifti1Image(segmentation, affine=img.affine, header=img.header)
