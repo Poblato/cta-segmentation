@@ -226,12 +226,10 @@ def EvaluateModel(model, val_loader, loss_fn, layer_batch_size):
                 preds = (probs > TH).long()
                 running_acc += (lbl_layer.detach().cpu().numpy() == preds.detach().cpu().numpy()).mean() * layer_batch_size
                 running_dice += loss_fn.compute_score(preds, lbl_layer) * layer_batch_size
-                intersection = np.intersect1d(lbl_layer.detach().cpu().numpy(), preds.detach().cpu().numpy()).sum()
-                union = np.union1d(lbl_layer.detach().cpu().numpy(), preds.detach().cpu().numpy()).sum()
-                running_jaccard = intersection/union * layer_batch_size
                 tp, fp, fn, tn = smp.metrics.get_stats(preds, (lbl_layer > 0), mode='binary')
+                running_jaccard = smp.metrics.iou_score(tp, fp, fn, tn) * layer_batch_size
                 running_precision += smp.metrics.precision(tp, fp, fn, tn) * layer_batch_size
-                running_recall += smp.metrics.sensitivity(tp, fp, fn, tn) * layer_batch_size
+                running_recall += smp.metrics.recall(tp, fp, fn, tn) * layer_batch_size
 
         Loss = running_loss / max(1, val_N*image_height)
         Acc = running_acc / max(1, val_N*image_height)
@@ -312,7 +310,7 @@ for params in param_grid:
     logger.info(line)
     print(line)
     # Export model weights to file
-    torch.save(model.state_dict(), f"model_weights/{config_num}.pth")
+    model.save_pretrained(f"model_weights/{config_num}.pth")
     config_num += 1
 
 print("done")

@@ -111,9 +111,7 @@ class WeightedLoss(_Loss):
     def aggregate_dice_loss(self, loss):
         return loss.mean()
 
-    def compute_score(
-        self, output, target, smooth=0.0, eps=1e-7, dims=None
-    ) -> torch.Tensor:
+    def compute_score(self, output, target, smooth=0.0, eps=1e-7, dims=None) -> torch.Tensor:
         return soft_dice_score(output, target, smooth, eps, dims)
     
     def dice_forward(self, y_pred: torch.Tensor, y_true: torch.Tensor) -> torch.Tensor:
