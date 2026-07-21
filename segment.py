@@ -36,9 +36,6 @@ dataloader = tio.SubjectsLoader(
     shuffle=True,
 )
 
-loss_fn = WeightedLoss(smp.losses.BINARY_MODE, dice_str=0, bce_str=0, focal_str=1, from_logits=True, 
-            bce_pos_weight=torch.tensor([1.0]), focal_alpha=0.0019, focal_gamma=2)
-
 with torch.no_grad():
     for batch in dataloader:
         img = batch["image"][tio.DATA].to(device)
@@ -52,13 +49,13 @@ with torch.no_grad():
         probs = torch.sigmoid(logits)
         segmentation = (probs > TH).long()
 
-        acc = (lbl_data.detach().cpu().numpy() == segmentation.detach().cpu().numpy()).mean()
-        dice = loss_fn.compute_score(segmentation, lbl_data).mean()
+        acc = (lbl_layer == preds).float().mean().item()
         tp, fp, fn, tn = smp.metrics.get_stats(segmentation, (lbl_data > 0), mode='binary')
         tp = torch.sum(tp)
         fp = torch.sum(fp)
         fn = torch.sum(fn)
         tn = torch.sum(tn)
+        dice = smp.metrics.f1_score(tp, fp, fn, tn)
         jaccard = smp.metrics.iou_score(tp, fp, fn, tn)
         precision = smp.metrics.precision(tp, fp, fn, tn)
         recall = smp.metrics.recall(tp, fp, fn, tn)

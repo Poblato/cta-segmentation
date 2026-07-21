@@ -16,8 +16,8 @@ valid_list = []
 # test_list = []
 
 files = os.listdir("dataset/processed/images")
-# num_images = files.__len__()
-num_images = 50
+num_images = files.__len__()
+# num_images = 50
 
 print("Loading dataset...")
 for i in range(num_images):
@@ -61,12 +61,13 @@ valid_dataloader = tio.SubjectsLoader(
 # )
 
 # Some training hyperparameters
-EPOCHS = 10
+EPOCHS = 20
 T_MAX = EPOCHS * len(train_dataloader)
 OUT_CLASSES = 1
 
 def TrainModel(model, train_loader, val_loader, loss_fn, layer_batch_size):
     log = logging.getLogger('train')
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
     LR = 2e-4
@@ -96,7 +97,7 @@ def TrainModel(model, train_loader, val_loader, loss_fn, layer_batch_size):
 
     image_height = train_loader.dataset[0]["image"][tio.DATA].size(3)
 
-    print("↳ Training model...")
+    print("Training model...")
     for epoch in range(EPOCHS):
         model.train()
         running_loss = 0.0
@@ -155,7 +156,7 @@ def TrainModel(model, train_loader, val_loader, loss_fn, layer_batch_size):
 
                     probs = torch.sigmoid(logits)
                     preds = (probs > TH).long()
-                    running_acc += (lbl_layer.detach().cpu().numpy() == preds.detach().cpu().numpy()).mean() * layer_batch_size
+                    running_acc += (lbl_layer == preds).float().mean().item() * layer_batch_size
 
         ValLoss = running_loss / max(1, val_N*image_height)
         ValAcc = running_acc / max(1, val_N*image_height)
@@ -184,7 +185,12 @@ def TrainModel(model, train_loader, val_loader, loss_fn, layer_batch_size):
         line=f"{epoch};{TrainLoss};{TrainAcc};{ValLoss};{ValAcc};{ema_val};{new_lr};{lr_drop};{best_val_loss};{accuracy_at_best};{best_epoch}"
         log.info(line)
         print(line)
-        if es_triggered: break
+        if es_triggered: 
+            print("ES triggered")
+            break
+    # Delete optimiser and scheduler to free gpu memory
+    del optimizer
+    del scheduler
 
 def EvaluateModel(model, val_loader, loss_fn, layer_batch_size):
     val_N=len(val_loader.dataset)
@@ -224,13 +230,13 @@ def EvaluateModel(model, val_loader, loss_fn, layer_batch_size):
 
                 probs = torch.sigmoid(logits)
                 preds = (probs > TH).long()
-                running_acc += (lbl_layer.detach().cpu().numpy() == preds.detach().cpu().numpy()).mean() * layer_batch_size
-                running_dice += loss_fn.compute_score(preds, lbl_layer) * layer_batch_size
+                running_acc += (lbl_layer == preds).float().mean().item() * layer_batch_size
                 tp, fp, fn, tn = smp.metrics.get_stats(preds, (lbl_layer > 0), mode='binary')
                 tp = torch.sum(tp)
                 fp = torch.sum(fp)
                 fn = torch.sum(fn)
                 tn = torch.sum(tn)
+                running_dice += smp.metrics.f1_score(tp, fp, fn, tn) * layer_batch_size
                 running_jaccard = smp.metrics.iou_score(tp, fp, fn, tn) * layer_batch_size
                 running_precision += smp.metrics.precision(tp, fp, fn, tn) * layer_batch_size
                 running_recall += smp.metrics.recall(tp, fp, fn, tn) * layer_batch_size
@@ -255,7 +261,7 @@ focal_strength = 2.0
 # params to vary: depth (def), layer_batch_size (def), loss fn (def), model encoder (maybe), LR (maybe)
 grid = {
     'model_depth': [3, 4],
-    'layer_batch_size': [32, 64, 128],
+    'layer_batch_size': [16, 32, 64],
     'dice_loss': [0, 1],
     'bce_loss': [0, 1],
     'focal_loss': [0, 1]
@@ -270,7 +276,13 @@ logger = logging.getLogger("configs")
 logger.setLevel(logging.INFO)
 logger.addHandler(logging.FileHandler("logs/hpo.log", mode="w"))
 
+train_log = logging.getLogger("train")
+train_log.setLevel(logging.INFO)
+train_log.addHandler(logging.FileHandler("logs/train.log", mode="a"))
+
 logger.info("ID, Depth, batch size, dice, bce, focal, loss, acc, dice_score, jaccard index, precision, recall")
+
+train_log.info("Epoch, TrainLoss, TrainAcc, ValLoss, ValAcc, EMAVal, newLR, LRdrop, bestValLoss, AccAtBest, BestEpoch")
 
 for params in param_grid:
     print(params)
@@ -314,10 +326,13 @@ for params in param_grid:
     logger.info(line)
     print(line)
     # Export model weights to file
+    model.cpu()
     model.save_pretrained(f"model_weights/config_{config_num}")
     config_num += 1
 
     # clear model to free GPU memory
+    del loss_fn
     del model
+    torch.cuda.empty_cache()
 
 print("done")
