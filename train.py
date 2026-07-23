@@ -274,7 +274,7 @@ config_num = 0
 
 logger = logging.getLogger("configs")
 logger.setLevel(logging.INFO)
-logger.addHandler(logging.FileHandler("logs/hpo.log", mode="w"))
+logger.addHandler(logging.FileHandler("logs/hpo.log", mode="a"))
 
 train_log = logging.getLogger("train")
 train_log.setLevel(logging.INFO)
@@ -289,6 +289,10 @@ for params in param_grid:
     # skip configs with 0 loss function
     if (params['dice_loss'] == 0 and params['bce_loss'] == 0 and params['focal_loss'] == 0):
         continue
+    
+    # if config_num < 41:
+    #     config_num += 1
+    #     continue
     
     # FIXME: should this start at 128? not 256
     decoder_channels = [256, 128, 64, 32, 16]
@@ -315,7 +319,7 @@ for params in param_grid:
     # loss_fn = smp.losses.SoftBCEWithLogitsLoss(from_logits=True, pos_weight=torch.tensor([1.0]))
     # loss_fn = smp.losses.FocalLoss(smp.losses.BINARY_MODE, from_logits=True, alpha=pos_prior, gamma=focal_strength)
     loss_fn = WeightedLoss(smp.losses.BINARY_MODE, dice_str=dice_str, bce_str=bce_str, focal_str=focal_str, from_logits=True, 
-                        bce_pos_weight=torch.tensor([1.0]), focal_alpha=pos_prior, focal_gamma=focal_strength)
+                        bce_pos_weight=torch.tensor([1.0], device=("cuda" if torch.cuda.is_available() else "cpu")), focal_alpha=pos_prior, focal_gamma=focal_strength)
 
     TrainModel(model, train_dataloader, valid_dataloader, loss_fn, params['layer_batch_size'])
 
