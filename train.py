@@ -206,10 +206,7 @@ def EvaluateModel(model, val_loader, loss_fn, layer_batch_size):
 
     running_loss = 0.0
     running_acc = 0.0
-    running_dice = 0.0
-    running_jaccard = 0.0
-    running_precision = 0.0
-    running_recall = 0.0
+    tp, fp, fn, tn = 0, 0, 0, 0
 
     with torch.no_grad():
         for batch in val_loader:
@@ -231,22 +228,18 @@ def EvaluateModel(model, val_loader, loss_fn, layer_batch_size):
                 probs = torch.sigmoid(logits)
                 preds = (probs > TH).long()
                 running_acc += (lbl_layer == preds).float().mean().item() * layer_batch_size
-                tp, fp, fn, tn = smp.metrics.get_stats(preds, (lbl_layer > 0), mode='binary')
-                tp = torch.sum(tp)
-                fp = torch.sum(fp)
-                fn = torch.sum(fn)
-                tn = torch.sum(tn)
-                running_dice += smp.metrics.f1_score(tp, fp, fn, tn) * layer_batch_size
-                running_jaccard = smp.metrics.iou_score(tp, fp, fn, tn) * layer_batch_size
-                running_precision += smp.metrics.precision(tp, fp, fn, tn) * layer_batch_size
-                running_recall += smp.metrics.recall(tp, fp, fn, tn) * layer_batch_size
+                tp_t, fp_t, fn_t, tn_t = smp.metrics.get_stats(preds, (lbl_layer > 0), mode='binary')
+                tp += torch.sum(tp_t)
+                fp += torch.sum(fp_t)
+                fn += torch.sum(fn_t)
+                tn += torch.sum(tn_t)
 
         Loss = running_loss / max(1, val_N*image_height)
         Acc = running_acc / max(1, val_N*image_height)
-        DiceScore = running_dice / max(1, val_N*image_height)
-        JaccardIndex = running_jaccard / max(1, val_N*image_height)
-        Precision = running_precision / max(1, val_N*image_height)
-        Recall = running_recall / max(1, val_N*image_height)
+        DiceScore = smp.metrics.f1_score(tp, fp, fn, tn)
+        JaccardIndex = smp.metrics.iou_score(tp, fp, fn, tn)
+        Precision = smp.metrics.precision(tp, fp, fn, tn)
+        Recall = smp.metrics.recall(tp, fp, fn, tn)
 
         line=f"{Loss};{Acc};{DiceScore};{JaccardIndex};{Precision};{Recall}"
         log.info(line)
