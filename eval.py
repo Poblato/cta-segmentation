@@ -16,9 +16,25 @@ output_path = "segmentation_1.nii.gz"
 TH = 0.5
 
 logger = logging.getLogger('eval')
-logger.addHandler(logging.FileHandler("logs/eval.log"))
+logger.addHandler(logging.FileHandler("logs/eval.log", mode='w'))
 logger.setLevel(logging.INFO)
 logger.info("Config Num, Acc, TP, FP, FN, TN, Dice, Jaccard, Precision, Recall")
+
+num_images = 200
+data_list = []
+for j in range(num_images):
+    subject = tio.Subject(
+        image=tio.ScalarImage(Path(f"dataset/processed/images/{j+1}.img_processed_norm.nii.gz")),
+        label=tio.LabelMap(Path(f"dataset/processed/labels/{j+1}.label_processed_norm.nii.gz"))
+    )
+    data_list.append(subject)
+dataset = tio.SubjectsDataset(data_list)
+dataloader = tio.SubjectsLoader(
+    dataset,
+    batch_size=1,
+    num_workers=0,
+    shuffle=False,
+)
 
 num_models = 42
 for i in range(num_models):
@@ -26,22 +42,6 @@ for i in range(num_models):
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
-
-    num_images = 200
-    data_list = []
-    for i in range(num_images):
-        subject = tio.Subject(
-            image=tio.ScalarImage(Path(f"dataset/processed/images/{i+1}.img_processed_norm.nii.gz")),
-            label=tio.LabelMap(Path(f"dataset/processed/labels/{i+1}.label_processed_norm.nii.gz"))
-        )
-        data_list.append(subject)
-    dataset = tio.SubjectsDataset(data_list)
-    dataloader = tio.SubjectsLoader(
-        dataset,
-        batch_size=1,
-        num_workers=0,
-        shuffle=False,
-    )
 
     tp, fp, fn, tn, acc = 0, 0, 0, 0, 0
 
