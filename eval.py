@@ -7,25 +7,20 @@ from pathlib import Path
 from WeightedLoss import WeightedLoss
 import logging
 
-# TODO: read params from command line
-
-model_path = "model_weights_prelim/config_0"
-image_path = "dataset/processed/images/1.img_processed_norm.nii.gz"
-label_path = "dataset/processed/labels/1.label_processed_norm.nii.gz"
-output_path = "segmentation_1.nii.gz"
 TH = 0.5
 
 logger = logging.getLogger('eval')
-logger.addHandler(logging.FileHandler("logs/eval.log", mode='w'))
+logger.addHandler(logging.FileHandler("logs/eval_hpo.log", mode='w'))
 logger.setLevel(logging.INFO)
 logger.info("Config Num, Acc, TP, FP, FN, TN, Dice, Jaccard, Precision, Recall")
 
-num_images = 200
+images = np.arange(161, 201)
+num_images = 40
 data_list = []
-for j in range(num_images):
+for j in images:
     subject = tio.Subject(
-        image=tio.ScalarImage(Path(f"dataset/processed/images/{j+1}.img_processed_norm.nii.gz")),
-        label=tio.LabelMap(Path(f"dataset/processed/labels/{j+1}.label_processed_norm.nii.gz"))
+        image=tio.ScalarImage(Path(f"dataset/processed/images/{j}.img_processed_norm.nii.gz")),
+        label=tio.LabelMap(Path(f"dataset/processed/labels/{j}.label_processed_norm.nii.gz"))
     )
     data_list.append(subject)
 dataset = tio.SubjectsDataset(data_list)
@@ -36,9 +31,9 @@ dataloader = tio.SubjectsLoader(
     shuffle=False,
 )
 
-num_models = 42
+num_models = 33
 for i in range(num_models):
-    model = smp.from_pretrained(Path(f"model_weights_prelim/config_{i}"))
+    model = smp.from_pretrained(Path(f"model_weights_hpo/config_{i}"))
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)

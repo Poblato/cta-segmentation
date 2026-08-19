@@ -12,10 +12,10 @@ import matplotlib.pyplot as plt
 # run model on specified file
 # read params from command line
 
-model_path = "model_weights_prelim/config_0"
-image_path = "dataset/processed/images/1.img_processed_norm.nii.gz"
-label_path = "dataset/processed/labels/1.label_processed_norm.nii.gz"
-output_path = "segmentation_1.nii.gz"
+model_path = "model_weights_1/config_15"
+image_path = "dataset/processed/images/2.img_processed_norm.nii.gz"
+label_path = "dataset/processed/labels/2.label_processed_norm.nii.gz"
+output_path = "segmentation_2.nii.gz"
 TH = 0.5
 
 model = smp.from_pretrained(model_path)
@@ -62,7 +62,7 @@ with torch.no_grad():
         print(f"acc={acc},dice={dice},tp={tp},fp={fp},fn={fn},tn={tn},jaccard={jaccard},precision={precision},recall={recall}")
 
 # reorder the segmentation back to normal
-segmentation = segmentation.permute(1,2,3,0).squeeze()
+segmentation = segmentation.permute(1,2,3,0).squeeze().cpu()
 # encode into new nifti image
 segmented_img = nib.Nifti1Image(segmentation, affine=img_file.affine, header=img_file.header)
 nib.save(segmented_img, output_path)
