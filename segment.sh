@@ -10,7 +10,7 @@ Arguments:
   output-dir            Directory to write resampled and normalised files
 
 Example:
-  $0 dataset/processed/ segmentations/
+  $0 dataset/processed/segmentations/
   $0 dataset/processed/scan1.nii.gz segmentations/
 USAGE
 }
@@ -22,6 +22,7 @@ fi
 
 input="$1"
 output_dir="$2"
+model_dir="best_model/"
 
 mkdir -p "$output_dir"
 
@@ -48,7 +49,7 @@ process_file() {
   outfile_name="$(get_output_name "$infile")"
   local outfile_path="$output_dir/$outfile_name"
 
-  python3 segment.py "$infile" "$outfile_path"
+  python3 segment.py "$model_dir" "$infile" "$outfile_path" 0
 
   echo "Saved: $outfile_path"
 }
