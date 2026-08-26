@@ -14,8 +14,8 @@ logger.addHandler(logging.FileHandler("logs/eval_hpo.log", mode='w'))
 logger.setLevel(logging.INFO)
 logger.info("Config Num, Acc, TP, FP, FN, TN, Dice, Jaccard, Precision, Recall")
 
-images = np.arange(161, 201)
-num_images = 40
+images = np.arange(1, 201)
+num_images = 200
 data_list = []
 for j in images:
     subject = tio.Subject(
